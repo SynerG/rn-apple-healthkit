@@ -15,11 +15,17 @@
 @interface RCTAppleHealthKit : NSObject <RCTBridgeModule>
 
 @property (nonatomic) HKHealthStore *healthStore;
+
+@property (strong) NSMutableDictionary *listeningStatus;
+@property (strong) NSMutableDictionary *completionHandlers;
+
 @property BOOL isSync;
 
 - (void)isHealthKitAvailable:(RCTResponseSenderBlock)callback;
 - (void)initializeHealthKit:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
 - (void)checkPermission:(NSString *)input callback:(RCTResponseSenderBlock)callback;
 - (void)getModuleInfo:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+
+- (void)registerObserversAtLaunch;
 
 @end

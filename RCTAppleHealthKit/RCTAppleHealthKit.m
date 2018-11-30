@@ -48,6 +48,13 @@ RCT_EXPORT_METHOD(initStepCountObserver:(NSDictionary *)input callback:(RCTRespo
     [self fitness_initializeStepEventObserver:input callback:callback];
 }
 
+
+RCT_EXPORT_METHOD(initStepCountObserverWithBackground:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback)
+{
+    [self fitness_initializeStepEventObserverWithBackground:input callback:callback];
+}
+
+
 RCT_EXPORT_METHOD(getBiologicalSex:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback)
 {
     [self characteristic_getBiologicalSex:input callback:callback];
@@ -225,6 +232,26 @@ RCT_EXPORT_METHOD(saveMindfulSession:(NSDictionary *)input callback:(RCTResponse
 }
 
 
+RCT_EXPORT_METHOD(setAndDoEnableAllBackgroundObservers:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback)
+{
+    [self fitness_setAndDoEnableAllBackgroundObservers:input callback:callback];
+}
+
+RCT_EXPORT_METHOD(readyToReceiveAllObserverEvents:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback)
+{
+    [self fitness_readyToReceiveAllObserverEvents:input callback:callback];
+}
+
+RCT_EXPORT_METHOD(callObserverCompletionHandler:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback)
+{
+    [self fitness_callObserverCompletionHandler:input callback:callback];
+}
+
+- (void)registerObserversAtLaunch{
+    [self fitness_registerObserversAtLaunch];
+}
+
+
 - (void)isHealthKitAvailable:(RCTResponseSenderBlock)callback
 {
     BOOL isAvailable = NO;
@@ -237,7 +264,13 @@ RCT_EXPORT_METHOD(saveMindfulSession:(NSDictionary *)input callback:(RCTResponse
 
 - (void)initializeHealthKit:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback
 {
-    self.healthStore = [[HKHealthStore alloc] init];
+    NSLog(@"Doing initializeHealthKit");
+    if (!self.healthStore){
+        NSLog(@"There was no healthStore yet. Initializing");
+        self.healthStore = [[HKHealthStore alloc] init];
+    } else {
+        NSLog(@"There was a healthStore already, so do not create a new one");
+    }
 
     if ([HKHealthStore isHealthDataAvailable]) {
         NSSet *writeDataTypes;

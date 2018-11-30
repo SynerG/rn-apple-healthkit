@@ -12,6 +12,7 @@
 
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventDispatcher.h>
+#import <SGTimeLogger.h>
 
 @implementation RCTAppleHealthKit (Methods_Fitness)
 
@@ -203,6 +204,282 @@
 
     [self.healthStore executeQuery:query];
 }
+
+
+
+
+- (void)fitness_registerObserversAtLaunch{
+    NSLog(@"Called fitness_registerObserversAtLaunch!!");
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"AllBackgroundObserversEnabled"]) {
+        NSLog(@"Option BackgroundObserversEnabled is enabled. Calling fitness_enableAllBackgroundObservers");
+
+        if (!self.healthStore){
+            NSLog(@"There was no healthStore yet. Initializing from register at launch");
+            [SGTimeLogger log:@"N. ObserversAtLaunch enabled. Initializing HK store too"];
+            self.healthStore = [[HKHealthStore alloc] init];
+        } else {
+            [SGTimeLogger log:@"N. ObserversAtLaunch enabled. HK store was already init"];
+            NSLog(@"There was a healthStore already, so do not create a new one from register at launch");
+        }
+
+        [self fitness_enableAllBackgroundObservers];
+    } else {
+        [SGTimeLogger log:@"N. ObserversAtLaunch not enabled"];
+        NSLog(@"Option BackgroundObserversEnabled is disabled");
+    }
+}
+
+- (void)fitness_setAndDoEnableAllBackgroundObservers:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback
+{
+    NSLog(@"Called fitness_setAndDoEnableAllBackgroundObservers");
+    NSLog(@"Setting in NSUserDefaults AllBackgroundObserversEnabled");
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:YES forKey:@"AllBackgroundObserversEnabled"];
+    // TODO: Have a callback in enableAllBackgroundObservers and notify of internal errors in that function to JS
+    [SGTimeLogger log:@"N. Set df enable ObserversAtLaunch"];
+    [self fitness_enableAllBackgroundObservers];
+    callback(@[[NSNull null], @"Completed setAndDoEnableAllBackgroundObservers"]);
+}
+
+- (void)fitness_enableAllBackgroundObservers
+{
+    NSLog(@"Called fitness_enableAllBackgroundObservers...");
+    HKSampleType *sampleType =
+    [HKObjectType quantityTypeForIdentifier:HKQuantityTypeIdentifierStepCount];
+    [SGTimeLogger log:@"N. fitness_enableAllBackgroundObservers"];
+    HKObserverQuery *query =
+    [[HKObserverQuery alloc]
+     initWithSampleType:sampleType
+     predicate:nil
+     updateHandler:^(HKObserverQuery *query,
+                     HKObserverQueryCompletionHandler completionHandler,
+                     NSError *error) {
+
+         if (error) {
+             // Perform Proper Error Handling Here...
+             [SGTimeLogger log:[NSString stringWithFormat:@"N. Error in HKObserverQuery: %@", error.localizedDescription]];
+             NSLog(@"*** An error occured while setting up the stepCount observer. %@ ***", error.localizedDescription);
+             //callback(@[RCTMakeError(@"An error occured while setting up the stepCount observer", error, nil)]);
+             return;
+         }
+         [SGTimeLogger log:@"N. Observer called"];
+         NSLog(@"Change steps event received in Native library");
+
+
+         // Save completionHandler for later
+         if (!self.completionHandlers){
+             NSLog(@"Initializing self.completionHandlers...");
+             self.completionHandlers = [[NSMutableDictionary alloc] init];
+         }
+         NSMutableDictionary * handlersForType = [self.completionHandlers objectForKey:HKQuantityTypeIdentifierStepCount];
+         NSLog(@"handlersForType is: %@", handlersForType);
+         if (!handlersForType){
+             NSLog(@"Initializing handlersForType...");
+             handlersForType = [[NSMutableDictionary alloc] init];
+             [self.completionHandlers setObject:handlersForType forKey:HKQuantityTypeIdentifierStepCount];
+         }
+
+         NSLog(@"Preparing id str");
+         NSDate *currDate = [NSDate date];
+         double timePassed_ms = [currDate timeIntervalSinceReferenceDate];
+         NSString *key= [NSString stringWithFormat:@"%f", timePassed_ms];
+
+         NSLog(@"Saving completionHandler in dictionary");
+         NSLog(@"Completion handler is: %@", completionHandler);
+
+         NSLog(@"Copy completion handler");
+         void(^completionHandlerCopy)(void) = [completionHandler copy];//Block_copy(handler); // Tmb vale: [handler copy];
+         NSLog(@"Copy completion handler result: %@", completionHandlerCopy);
+
+         NSLog(@"Setting completion handler copy in dictionary...");
+         [handlersForType setObject:completionHandlerCopy forKey:key];
+         NSLog(@"Result of Set completion handler copy in dic: %@", handlersForType);
+         NSLog(@"Result in full completionHandlers dic: %@", self.completionHandlers);
+
+
+         // JS listening status and sending event
+         if (!self.listeningStatus){
+             NSLog(@"Initializing listeningStatus dictionary");
+             self.listeningStatus = [[NSMutableDictionary alloc] init];
+         }
+
+         // NSNumber *yesNumber = @YES
+         // [parameters setValue:yesNumber forKey:@"news"];
+         // [[myDictionary objectForKey:theKey] boolValue]
+
+         //[self.listeningStatus objectForKey:HKQuantityTypeIdentifierStepCount];
+
+         BOOL isListeningType = [[self.listeningStatus objectForKey:HKQuantityTypeIdentifierStepCount] boolValue];
+
+         NSLog(@"Got listening status for steps: %d", isListeningType);
+         if (isListeningType){
+             [SGTimeLogger log:[NSString stringWithFormat:@"N. js is listening. Sending event: %@", key]];
+             NSLog(@"Is already listening for steps. Sending evento to JS directly");
+             [self.bridge.eventDispatcher sendAppEventWithName:@"change:steps"
+                                                          body:@{
+                                                                 @"name": @"change:steps",
+                                                                 @"completionType": [NSString stringWithFormat:@"%@", HKQuantityTypeIdentifierStepCount],
+                                                                 @"completionId": key
+                                                                 }];
+         } else {
+             [SGTimeLogger log:@"N. js is not listening yet"];
+             NSLog(@"It is not listening type yet. Do nothing else");
+         }
+
+         // If you have subscribed for background updates you must call the completion handler here.
+         //completionHandler();
+
+     }];
+
+    [self.healthStore executeQuery:query];
+
+    [SGTimeLogger log:@"N. Enabling BG delivery"];
+    [self.healthStore enableBackgroundDeliveryForType:sampleType frequency:HKUpdateFrequencyImmediate withCompletion:^(BOOL success, NSError * _Nullable error) {
+        if (!success) {
+            NSLog(@"failed to enable background delivery");
+        } else {
+            NSLog(@"Background delivery enabled successfully!");
+        }
+    }];
+    NSLog(@"End of fitness_enableAllBackgroundObservers");
+}
+
+- (void)fitness_readyToReceiveAllObserverEvents:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback
+{
+    NSLog(@"JS has signalled readyToReceiveAllObserverEvents. See if pending events to notify");
+
+    [SGTimeLogger log:@"N. js has signalled is ready"];
+    if (!self.listeningStatus){
+        NSLog(@"Initializing listeningStatus dictionary from ready");
+        self.listeningStatus = [[NSMutableDictionary alloc] init];
+    }
+
+    // Process step events
+    NSLog(@"Setting Step listening as ready");
+    [self.listeningStatus setObject:@YES forKey:HKQuantityTypeIdentifierStepCount];
+
+    // If there were step events already registered, loop through them and notify them
+    NSLog(@"completionHandlers was: %@", self.completionHandlers);
+    if (self.completionHandlers){
+        NSLog(@"CompletionHandlers dic was initialized...");
+        NSMutableDictionary * handlersForType = [self.completionHandlers objectForKey:HKQuantityTypeIdentifierStepCount];
+        NSLog(@"handlersForType step was: %@", handlersForType);
+        if (handlersForType){
+            NSLog(@"Handlers for steps was Initialized. Loop it");
+            for (id key in handlersForType){
+                NSLog(@"Got key: %@. Getting completionHandler just for fun", key);
+                void(^completionHandler)(void) = [handlersForType objectForKey:key];
+                NSLog(@"Got completionHandler for fun: %@", completionHandler);
+                NSLog(@"Sending event for type: %@ and key: %@", HKQuantityTypeIdentifierStepCount, key);
+                [SGTimeLogger log:[NSString stringWithFormat:@"N. Notifying about: %@", key]];
+                [self.bridge.eventDispatcher sendAppEventWithName:@"change:steps"
+                                                             body:@{
+                                                                    @"name": @"change:steps",
+                                                                    @"completionType": [NSString stringWithFormat:@"%@", HKQuantityTypeIdentifierStepCount],
+                                                                    @"completionId": key
+                                                                    }];
+            }
+            NSLog(@"Done looping");
+        } else {
+            [SGTimeLogger log:@"N. No step comp handlers to notify"];
+            NSLog(@"There were no completionHandlers for steps yet");
+        }
+    } else {
+        [SGTimeLogger log:@"N. No comp handlers in general to notify"];
+        NSLog(@"There were no completionHandlers in general");
+    }
+
+    // TODO: Implement HKWorkouts too
+
+    // Not required, but:
+    callback(@[[NSNull null], @"All pending events have been emited from Native"]);
+}
+
+- (void)fitness_callObserverCompletionHandler:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback
+{
+    NSLog(@"Native fitness_callObserverCompletionHandler...");
+    NSString *completionType = [input objectForKey:@"completionType"];
+    NSString *completionId = [input objectForKey:@"completionId"];
+    NSLog(@"Recovered from input. completionType: %@ completionId: %@", completionType, completionId);
+
+    NSLog(@"self.completionHandlers is: %@", self.completionHandlers);
+    if (!self.completionHandlers){
+        [SGTimeLogger log:[NSString stringWithFormat:@"N. Had to call comp hand %@, but compHands no init yet!", completionId]];
+        NSLog(@"WARN: There were no completionHandlers to call!!");
+        return;
+    }
+
+    NSMutableDictionary * handlersForType = [self.completionHandlers objectForKey:completionType];
+    NSLog(@"handlers for recovered type is: %@", handlersForType);
+    if(!handlersForType){
+        [SGTimeLogger log:[NSString stringWithFormat:@"N. Had to call comp hand %@, but compHands no handlersForType yet!", completionId]];
+        NSLog(@"WARN: There were no completionHandlers for this type to call!!");
+        return;
+    }
+
+    void(^completionHandler)(void) = [handlersForType objectForKey:completionId];
+    NSLog(@"Recovered completionHandler to call: %@", completionHandler);
+    if (completionHandler){
+        completionHandler();
+        [SGTimeLogger log:[NSString stringWithFormat:@"N. Called comp hand: %@", completionId]];
+        NSLog(@"Finally called completion handler!");
+        [handlersForType removeObjectForKey:completionId];
+        NSLog(@"Removed completion handler. Now handlersForType is: %@", handlersForType);
+    } else {
+        [SGTimeLogger log:[NSString stringWithFormat:@"N. Had to call comp hand %@, but does not exist!", completionId]];
+        NSLog(@"There was no completion handler to call");
+    }
+
+
+    // Not required, but:
+    callback(@[[NSNull null], @"Completion handler has been called from Native"]);
+}
+
+// NOTE: Not really used in new implementation!
+- (void)fitness_initializeStepEventObserverWithBackground:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback
+{
+    HKSampleType *sampleType =
+    [HKObjectType quantityTypeForIdentifier:HKQuantityTypeIdentifierStepCount];
+
+    HKObserverQuery *query =
+    [[HKObserverQuery alloc]
+     initWithSampleType:sampleType
+     predicate:nil
+     updateHandler:^(HKObserverQuery *query,
+                     HKObserverQueryCompletionHandler completionHandler,
+                     NSError *error) {
+
+         if (error) {
+             // Perform Proper Error Handling Here...
+             NSLog(@"*** An error occured while setting up the stepCount observer. %@ ***", error.localizedDescription);
+             callback(@[RCTMakeError(@"An error occured while setting up the stepCount observer", error, nil)]);
+             return;
+         }
+         [SGTimeLogger log:@"Native Observer called"];
+         NSLog(@"Change steps event received in Native library");
+
+         [self.bridge.eventDispatcher sendAppEventWithName:@"change:steps"
+                                                      body:@{@"name": @"change:steps"}];
+
+         // If you have subscribed for background updates you must call the completion handler here.
+         completionHandler();
+
+     }];
+
+    [self.healthStore executeQuery:query];
+
+
+    [self.healthStore enableBackgroundDeliveryForType:sampleType frequency:HKUpdateFrequencyImmediate withCompletion:^(BOOL success, NSError * _Nullable error) {
+        if (!success) {
+            NSLog(@"failed to enable background delivery");
+        } else {
+            NSLog(@"Background delivery enabled successfully!");
+        }
+    }];
+}
+
+
+
 
 
 - (void)fitness_getDistanceWalkingRunningOnDay:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback

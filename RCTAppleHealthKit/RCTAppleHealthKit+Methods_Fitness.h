@@ -16,6 +16,15 @@
 - (void)fitness_getDailyStepSamples:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
 - (void)fitness_saveSteps:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
 - (void)fitness_initializeStepEventObserver:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+
+- (void)fitness_registerObserversAtLaunch;
+- (void)fitness_enableAllBackgroundObservers;
+- (void)fitness_readyToReceiveAllObserverEvents:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+- (void)fitness_callObserverCompletionHandler:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+// NOTE: Really setAndDoEnableAllBackgroundObservers does not need the input dictionary, neither the callback
+- (void)fitness_setAndDoEnableAllBackgroundObservers:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+- (void)fitness_initializeStepEventObserverWithBackground:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
+
 - (void)fitness_getDistanceWalkingRunningOnDay:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
 - (void)fitness_getDailyDistanceWalkingRunningSamples:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
 - (void)fitness_getDistanceCyclingOnDay:(NSDictionary *)input callback:(RCTResponseSenderBlock)callback;
