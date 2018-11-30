@@ -281,6 +281,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/..",
 					"$(SRCROOT)/../../react-native/React/**",
 					"$(SRCROOT)/../../../React/**",
 				);
@@ -294,6 +295,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/..",
 					"$(SRCROOT)/../../react-native/React/**",
 					"$(SRCROOT)/../../../React/**",
 				);
